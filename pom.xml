@@ -269,17 +269,6 @@
         </dependencies>
     </dependencyManagement>
 
-    <distributionManagement>
-        <snapshotRepository>
-            <id>apc-snapshot</id>
-            <url>gs://apc-maven-artifacts/snapshots</url>
-        </snapshotRepository>
-        <repository>
-            <id>apc-release</id>
-            <url>gs://apc-maven-artifacts/releases</url>
-        </repository>
-    </distributionManagement>
-
     <build>
         <extensions>
             <extension>
