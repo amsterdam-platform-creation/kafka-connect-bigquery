@@ -16,7 +16,7 @@ fork of the project.
 
 ## Download
 
-The latest releases are available in the GitHub release tab, or via [tarballs in Maven central](http://search.maven.org/#search%7Cga%7C1%7Ca%3A%22kcbq-connector%22).
+The latest releases are available in the GitHub release tab, or via [Confluent Hub](https://www.confluent.io/hub/wepay/kafka-connect-bigquery).
 
 ## Standalone Quickstart
 
@@ -255,3 +255,9 @@ verify its accuracy, it will be returned in ascending order based on that "row" 
   [Schema Registry]: https://github.com/confluentinc/schema-registry
   [Semantic Versioning]: http://semver.org
   [Zookeeper]: https://zookeeper.apache.org
+
+## Implementation details of different modes
+### Upsert/Delete with Legacy InsertAll API
+Click [here](https://docs.google.com/document/d/1p8_rLQqR9GIALIruB3-MjqR8EgYdaEw2rlFF1fxRJf0/edit#heading=h.lfiuaruj2s8y) to read the implementation details of upsert/delete mode with Legacy InsertAll API
+
+    
