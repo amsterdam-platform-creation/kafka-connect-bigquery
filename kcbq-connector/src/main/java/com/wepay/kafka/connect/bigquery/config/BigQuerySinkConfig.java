@@ -211,16 +211,6 @@ public class BigQuerySinkConfig extends AbstractConfig {
         );
       }
 
-      if (topic2TableMap.containsValue(table)) {
-        throw new ConfigException(
-                name,
-                topic2TableMapString,
-                String.format(
-                        "The table name %s is duplicated. Table names cannot be duplicated.",
-                        table
-                )
-        );
-      }
       topic2TableMap.put(topic, table);
     }
   };
@@ -351,6 +341,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
       + "suffix.";
 
   public static final String MERGE_INTERVAL_MS_CONFIG =                    "mergeIntervalMs";
+  public static final String MERGE_RECORDS_THRESHOLD_CONFIG =                    "mergeRecordsThreshold";
   private static final ConfigDef.Type MERGE_INTERVAL_MS_TYPE =              ConfigDef.Type.LONG;
   public static final long MERGE_INTERVAL_MS_DEFAULT =                     60_000L;
   private static final ConfigDef.Validator MERGE_INTERVAL_MS_VALIDATOR =   ConfigDef.LambdaValidator.with(
@@ -370,10 +361,11 @@ public class BigQuerySinkConfig extends AbstractConfig {
   );
   private static final ConfigDef.Importance MERGE_INTERVAL_MS_IMPORTANCE = ConfigDef.Importance.LOW;
   private static final String MERGE_INTERVAL_MS_DOC =
-      "How often (in milliseconds) to perform a merge flush, if upsert/delete is enabled. Can be "
-      + "set to -1 to disable periodic flushing.";
+      "How often (in milliseconds) to perform a merge flush, if upsert/delete is enabled. Can be set to -1" +
+              " to disable periodic flushing. Either " +MERGE_INTERVAL_MS_CONFIG + " or "
+              + MERGE_RECORDS_THRESHOLD_CONFIG + ", or both must be enabled.\nThis should not be set to less" +
+              " than 10 seconds. A validation would be introduced in a future release to this effect.";
 
-  public static final String MERGE_RECORDS_THRESHOLD_CONFIG =                    "mergeRecordsThreshold";
   private static final ConfigDef.Type MERGE_RECORDS_THRESHOLD_TYPE =             ConfigDef.Type.LONG;
   public static final long MERGE_RECORDS_THRESHOLD_DEFAULT =                     -1;
   private static final ConfigDef.Validator MERGE_RECORDS_THRESHOLD_VALIDATOR =   ConfigDef.LambdaValidator.with(
@@ -394,7 +386,8 @@ public class BigQuerySinkConfig extends AbstractConfig {
   private static final ConfigDef.Importance MERGE_RECORDS_THRESHOLD_IMPORTANCE = ConfigDef.Importance.LOW;
   private static final String MERGE_RECORDS_THRESHOLD_DOC =
       "How many records to write to an intermediate table before performing a merge flush, if " 
-      + "upsert/delete is enabled. Can be set to -1 to disable record count-based flushing.";
+      + "upsert/delete is enabled. Can be set to -1 to disable record count-based flushing. Either "
+              + MERGE_INTERVAL_MS_CONFIG + " or " + MERGE_RECORDS_THRESHOLD_CONFIG + ", or both must be enabled.";
 
   public static final String THREAD_POOL_SIZE_CONFIG =                  "threadPoolSize";
   private static final ConfigDef.Type THREAD_POOL_SIZE_TYPE =           ConfigDef.Type.INT;
@@ -493,6 +486,12 @@ public class BigQuerySinkConfig extends AbstractConfig {
   private static final String BIGQUERY_CLUSTERING_FIELD_NAMES_DOC =
       "List of fields on which data should be clustered by in BigQuery, separated by commas";
 
+  public static final String CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_CONFIG = "convertDebeziumTimestampToInteger";
+  private static final ConfigDef.Type CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_TYPE = ConfigDef.Type.BOOLEAN;
+  private static final Boolean CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_DEFAULT = false;
+  private static final ConfigDef.Importance CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_IMPORTANCE =
+          ConfigDef.Importance.MEDIUM;
+
   public static final String TIME_PARTITIONING_TYPE_CONFIG = "timePartitioningType";
   private static final ConfigDef.Type TIME_PARTITIONING_TYPE_TYPE = ConfigDef.Type.STRING;
   public static final String TIME_PARTITIONING_TYPE_DEFAULT = TimePartitioning.Type.DAY.name().toUpperCase();
@@ -531,6 +530,17 @@ public class BigQuerySinkConfig extends AbstractConfig {
   public static final List<String> CONNECTOR_RUNTIME_PROVIDER_TYPES = Stream.of("Confluent Platform", "Confluent Cloud")
           .collect(Collectors.toList());
 
+  public static final String MAX_RETRIES_CONFIG = "max.retries";
+  private static final ConfigDef.Type MAX_RETRIES_TYPE = ConfigDef.Type.INT;
+  private static final int MAX_RETRIES_DEFAULT = 10;
+  private static final ConfigDef.Validator MAX_RETRIES_VALIDATOR = ConfigDef.Range.atLeast(1);
+  private static final ConfigDef.Importance MAX_RETRIES_IMPORTANCE = ConfigDef.Importance.MEDIUM;
+  private static final String MAX_RETRIES_DOC = "The maximum number of times to retry on retriable errors before failing the task.";
+
+  public static final String ENABLE_RETRIES_CONFIG = "enableRetries";
+  private static final ConfigDef.Type ENABLE_RETRIES_TYPE = ConfigDef.Type.BOOLEAN;
+  public static final Boolean ENABLE_RETRIES_DEFAULT = true;
+  private static final ConfigDef.Importance ENABLE_RETRIES_IMPORTANCE = ConfigDef.Importance.MEDIUM;
   /**
    * Return the ConfigDef object used to define this config's fields.
    *
@@ -781,6 +791,11 @@ public class BigQuerySinkConfig extends AbstractConfig {
             BIGQUERY_CLUSTERING_FIELD_NAMES_VALIDATOR,
             BIGQUERY_CLUSTERING_FIELD_NAMES_IMPORTANCE,
             BIGQUERY_CLUSTERING_FIELD_NAMES_DOC
+        ).defineInternal(
+            CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_CONFIG,
+            CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_TYPE,
+            CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_DEFAULT,
+            CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_IMPORTANCE
         ).define(
             TIME_PARTITIONING_TYPE_CONFIG,
             TIME_PARTITIONING_TYPE_TYPE,
@@ -823,6 +838,18 @@ public class BigQuerySinkConfig extends AbstractConfig {
                     CONNECTOR_RUNTIME_PROVIDER_TYPE,
                     CONNECTOR_RUNTIME_PROVIDER_DEFAULT,
                     CONNECTOR_RUNTIME_PROVIDER_IMPORTANCE
+        ).define(
+            MAX_RETRIES_CONFIG,
+            MAX_RETRIES_TYPE,
+            MAX_RETRIES_DEFAULT,
+            MAX_RETRIES_VALIDATOR,
+            MAX_RETRIES_IMPORTANCE,
+            MAX_RETRIES_DOC
+        ).defineInternal(
+            ENABLE_RETRIES_CONFIG,
+            ENABLE_RETRIES_TYPE,
+            ENABLE_RETRIES_DEFAULT,
+            ENABLE_RETRIES_IMPORTANCE
         );
   }
 
@@ -922,7 +949,7 @@ public class BigQuerySinkConfig extends AbstractConfig {
    * @return a {@link RecordConverter} for BigQuery.
    */
   public RecordConverter<Map<String, Object>> getRecordConverter() {
-    return new BigQueryRecordConverter(getBoolean(CONVERT_DOUBLE_SPECIAL_VALUES_CONFIG));
+    return new BigQueryRecordConverter(getBoolean(CONVERT_DOUBLE_SPECIAL_VALUES_CONFIG), getBoolean(CONVERT_DEBEZIUM_TIMESTAMP_TO_INTEGER_CONFIG));
   }
 
   /**

@@ -243,7 +243,7 @@ public class BigQuerySinkConfigTest {
     new BigQuerySinkConfig(configProperties);
   }
 
-  @Test (expected = ConfigException.class)
+  @Test
   public void testTopic2TableDuplicateTable() {
     Map<String, String> configProperties = propertiesFactory.getProperties();
     configProperties.put(BigQuerySinkConfig.TOPIC2TABLE_MAP_CONFIG, "topic:table, topic2:table");
@@ -284,4 +284,15 @@ public class BigQuerySinkConfigTest {
     assertFalse(config.getTopic2TableMap().isPresent());
   }
 
+  @Test(expected = ConfigException.class)
+  public void testInvalidMaxRetries() {
+    Map<String, String> badConfigProperties = propertiesFactory.getProperties();
+
+    badConfigProperties.put(
+            BigQuerySinkConfig.MAX_RETRIES_CONFIG,
+            "-1"
+    );
+
+    new BigQuerySinkConfig(badConfigProperties);
+  }
 }
